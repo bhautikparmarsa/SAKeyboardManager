@@ -167,17 +167,25 @@ extension SAKeyboardManager {
             
             let frame = field.convert(field.bounds, to: scrollView)
             
-            let visibleHeight = scrollView.frame.height - scrollView.contentInset.bottom
+            let visibleTop = scrollView.contentOffset.y
+            let visibleBottom = visibleTop + scrollView.frame.height - scrollView.contentInset.bottom
+            
+            let fieldTop = frame.minY
+            let fieldBottom = frame.maxY
+            
+            var offsetY = scrollView.contentOffset.y
             
             let padding: CGFloat = 20
-
-            let targetY = max(
-                frame.origin.y - padding,
-                -scrollView.contentInset.top
-            )
+            
+            // 🔥 ONLY SCROLL IF NEEDED
+            if fieldBottom > visibleBottom {
+                offsetY = fieldBottom - scrollView.frame.height + scrollView.contentInset.bottom + padding
+            } else if fieldTop < visibleTop {
+                offsetY = fieldTop - padding
+            }
             
             scrollView.setContentOffset(
-                CGPoint(x: 0, y: targetY),
+                CGPoint(x: 0, y: max(offsetY, -scrollView.contentInset.top)),
                 animated: true
             )
         }
@@ -222,6 +230,9 @@ extension SAKeyboardManager {
         titleLabel.font = UIFont.systemFont(ofSize: 14, weight: .medium)
         titleLabel.textColor = .secondaryLabel
         titleLabel.textAlignment = .center
+        titleLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 100).isActive = true
+        titleLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         
         let titleItem = UIBarButtonItem(customView: titleLabel)
         
@@ -244,25 +255,40 @@ extension SAKeyboardManager {
     
     private func updateToolbarTitle() {
         
-        guard let field = activeField,
-              let toolbar = (field as? UITextField)?.inputAccessoryView as? UIToolbar
-                ?? (field as? UITextView)?.inputAccessoryView as? UIToolbar
-        else { return }
+        guard let field = activeField else { return }
         
-        let placeholder: String?
+        let toolbar: UIToolbar?
         
         if let tf = field as? UITextField {
-            placeholder = tf.placeholder
+            toolbar = tf.inputAccessoryView as? UIToolbar
         } else if let tv = field as? UITextView {
-            placeholder = tv.text.isEmpty ? "Input" : nil
+            toolbar = tv.inputAccessoryView as? UIToolbar
         } else {
-            placeholder = nil
+            toolbar = nil
         }
         
-        if let labelItem = toolbar.items?.compactMap({ $0.customView as? UILabel }).first {
-            labelItem.text = placeholder ?? ""
-            labelItem.sizeToFit()
+        guard let toolbar = toolbar else { return }
+        
+        let placeholder: String
+        
+        if let tf = field as? UITextField {
+            placeholder = tf.placeholder ?? ""
+        } else if let tv = field as? UITextView {
+            placeholder = tv.text.isEmpty ? "Input" : ""
+        } else {
+            placeholder = ""
         }
+        
+        // 🔥 SAFELY FIND LABEL
+        for item in toolbar.items ?? [] {
+            if let label = item.customView as? UILabel {
+                label.text = placeholder
+                label.sizeToFit()
+            }
+        }
+        
+        toolbar.setNeedsLayout()
+        toolbar.layoutIfNeeded()
     }
 }
 
