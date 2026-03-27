@@ -28,11 +28,11 @@ Keyboard hides → layout resets
 🔹 Add via Xcode
 Go to File → Add Packages
 Enter repository URL:
-https://github.com/your-username/MiniKeyboardManager.git
+(https://github.com/bhautikparmarsa/SAKeyboardManager.git)
 
 🔹 Or add in Package.swift
 dependencies: [
-    .package(url: "", from: "1.0.0")
+    .package(url: "https://github.com/bhautikparmarsa/SAKeyboardManager.git", from: "1.0.0")
 ]
 
 🛠 Usage
