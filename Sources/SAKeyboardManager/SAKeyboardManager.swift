@@ -1,4 +1,5 @@
 import UIKit
+
 @MainActor
 public final class SAKeyboardManager: NSObject {
     
@@ -41,6 +42,17 @@ extension SAKeyboardManager {
     
     private func stop() {
         NotificationCenter.default.removeObserver(self)
+        resetState()
+    }
+}
+
+// MARK: - Reset
+
+extension SAKeyboardManager {
+    
+    private func resetState() {
+        activeField = nil
+        allFields.removeAll()
     }
 }
 
@@ -52,26 +64,22 @@ extension SAKeyboardManager {
         guard let view = notification.object as? UIView else { return }
         
         activeField = view
-        attachToolbarIfNeeded(view)
+        
+        attachToolbar(view) // 🔥 ALWAYS attach fresh toolbar
         collectFields(in: view.window)
         
-        updateToolbarTitle()
         adjustScroll()
     }
 }
 
-// MARK: - Collect Fields Automatically
+// MARK: - Collect Fields
 
 extension SAKeyboardManager {
     
     private func collectFields(in root: UIView?) {
         guard let root = root else { return }
         
-        let newFields = findAllTextInputs(in: root)
-        
-        if newFields.count != allFields.count {
-            allFields = newFields
-        }
+        allFields = findAllTextInputs(in: root) // 🔥 always refresh
     }
     
     private func findAllTextInputs(in view: UIView) -> [UIView] {
@@ -93,7 +101,7 @@ extension SAKeyboardManager {
     }
 }
 
-// MARK: - Find ScrollView Automatically
+// MARK: - ScrollView Finder
 
 extension SAKeyboardManager {
     
@@ -151,10 +159,12 @@ extension SAKeyboardManager {
         
         scrollView.contentInset.bottom = 0
         scrollView.verticalScrollIndicatorInsets.bottom = 0
+        
+        resetState() // 🔥 VERY IMPORTANT
     }
 }
 
-// MARK: - 🔥 Scroll Fix (Forward + Backward)
+// MARK: - Scroll Logic (FIXED)
 
 extension SAKeyboardManager {
     
@@ -177,7 +187,6 @@ extension SAKeyboardManager {
             
             let padding: CGFloat = 20
             
-            // 🔥 ONLY SCROLL IF NEEDED
             if fieldBottom > visibleBottom {
                 offsetY = fieldBottom - scrollView.frame.height + scrollView.contentInset.bottom + padding
             } else if fieldTop < visibleTop {
@@ -192,22 +201,22 @@ extension SAKeyboardManager {
     }
 }
 
-// MARK: - Toolbar (Auto Attach)
+// MARK: - Toolbar (FIXED)
 
 extension SAKeyboardManager {
     
-    private func attachToolbarIfNeeded(_ view: UIView) {
+    private func attachToolbar(_ view: UIView) {
         
-        if let tf = view as? UITextField, tf.inputAccessoryView == nil {
-            tf.inputAccessoryView = createToolbar()
-        }
+        let toolbar = createToolbar(for: view)
         
-        if let tv = view as? UITextView, tv.inputAccessoryView == nil {
-            tv.inputAccessoryView = createToolbar()
+        if let tf = view as? UITextField {
+            tf.inputAccessoryView = toolbar
+        } else if let tv = view as? UITextView {
+            tv.inputAccessoryView = toolbar
         }
     }
     
-    private func createToolbar() -> UIToolbar {
+    private func createToolbar(for view: UIView) -> UIToolbar {
         
         let toolbar = UIToolbar()
         toolbar.sizeToFit()
@@ -226,15 +235,20 @@ extension SAKeyboardManager {
             action: #selector(nextTapped)
         )
         
-        let titleLabel = UILabel()
-        titleLabel.font = UIFont.systemFont(ofSize: 14, weight: .medium)
-        titleLabel.textColor = .secondaryLabel
-        titleLabel.textAlignment = .center
-        titleLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 100).isActive = true
-        titleLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let label = UILabel()
+        label.font = UIFont.systemFont(ofSize: 14, weight: .medium)
+        label.textColor = .secondaryLabel
+        label.textAlignment = .center
         
-        let titleItem = UIBarButtonItem(customView: titleLabel)
+        if let tf = view as? UITextField {
+            label.text = tf.placeholder ?? ""
+        } else if let tv = view as? UITextView {
+            label.text = tv.text.isEmpty ? "Input" : ""
+        }
+        
+        label.sizeToFit()
+        
+        let titleItem = UIBarButtonItem(customView: label)
         
         let flexible = UIBarButtonItem(
             barButtonSystemItem: .flexibleSpace,
@@ -252,47 +266,9 @@ extension SAKeyboardManager {
         
         return toolbar
     }
-    
-    private func updateToolbarTitle() {
-        
-        guard let field = activeField else { return }
-        
-        let toolbar: UIToolbar?
-        
-        if let tf = field as? UITextField {
-            toolbar = tf.inputAccessoryView as? UIToolbar
-        } else if let tv = field as? UITextView {
-            toolbar = tv.inputAccessoryView as? UIToolbar
-        } else {
-            toolbar = nil
-        }
-        
-        guard let toolbar = toolbar else { return }
-        
-        let placeholder: String
-        
-        if let tf = field as? UITextField {
-            placeholder = tf.placeholder ?? ""
-        } else if let tv = field as? UITextView {
-            placeholder = tv.text.isEmpty ? "Input" : ""
-        } else {
-            placeholder = ""
-        }
-        
-        // 🔥 SAFELY FIND LABEL
-        for item in toolbar.items ?? [] {
-            if let label = item.customView as? UILabel {
-                label.text = placeholder
-                label.sizeToFit()
-            }
-        }
-        
-        toolbar.setNeedsLayout()
-        toolbar.layoutIfNeeded()
-    }
 }
 
-// MARK: - Navigation (Prev / Next Fix)
+// MARK: - Navigation (FIXED)
 
 extension SAKeyboardManager {
     
@@ -310,18 +286,23 @@ extension SAKeyboardManager {
     
     private func move(offset: Int) {
         
-        guard let current = activeField,
-              let index = allFields.firstIndex(where: { $0 === current }) else { return }
+        guard let current = activeField else { return }
+        
+        // 🔥 Recollect every time (fix stale issue)
+        collectFields(in: current.window)
+        
+        guard let index = allFields.firstIndex(where: { $0 === current }) else { return }
         
         let newIndex = index + offset
         
         guard newIndex >= 0, newIndex < allFields.count else { return }
         
         let nextField = allFields[newIndex]
+        
+        attachToolbar(nextField) // 🔥 important
         nextField.becomeFirstResponder()
         
         activeField = nextField
-        updateToolbarTitle()
-        adjustScroll() // 🔥 fixes reverse scroll
+        adjustScroll()
     }
 }
