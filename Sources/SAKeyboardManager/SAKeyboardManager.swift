@@ -67,7 +67,11 @@ extension SAKeyboardManager {
     private func collectFields(in root: UIView?) {
         guard let root = root else { return }
         
-        allFields = findAllTextInputs(in: root)
+        let newFields = findAllTextInputs(in: root)
+        
+        if newFields.count != allFields.count {
+            allFields = newFields
+        }
     }
     
     private func findAllTextInputs(in view: UIView) -> [UIView] {
@@ -82,7 +86,9 @@ extension SAKeyboardManager {
         }
         
         return result.sorted {
-            $0.frame.minY < $1.frame.minY
+            let f1 = $0.convert($0.bounds, to: nil)
+            let f2 = $1.convert($1.bounds, to: nil)
+            return f1.minY < f2.minY
         }
     }
 }
@@ -163,7 +169,12 @@ extension SAKeyboardManager {
             
             let visibleHeight = scrollView.frame.height - scrollView.contentInset.bottom
             
-            let targetY = max(frame.origin.y - visibleHeight * 0.3, 0)
+            let padding: CGFloat = 20
+
+            let targetY = max(
+                frame.origin.y - padding,
+                -scrollView.contentInset.top
+            )
             
             scrollView.setContentOffset(
                 CGPoint(x: 0, y: targetY),
@@ -194,14 +205,14 @@ extension SAKeyboardManager {
         toolbar.sizeToFit()
         
         let prev = UIBarButtonItem(
-            image: UIImage(systemName: "chevron.left"),
+            image: UIImage(systemName: "chevron.up"),
             style: .plain,
             target: self,
             action: #selector(previousTapped)
         )
         
         let next = UIBarButtonItem(
-            image: UIImage(systemName: "chevron.right"),
+            image: UIImage(systemName: "chevron.down"),
             style: .plain,
             target: self,
             action: #selector(nextTapped)
